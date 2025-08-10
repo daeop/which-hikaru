@@ -1,0 +1,470 @@
+
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Which Hikaru? — Browser Prototype</title>
+<style>
+  :root{--bg:#0f1115;--card:#121417;--muted:#9aa3b2;--accent:#e07a5f;--glass:rgba(255,255,255,0.03)}
+  html,body{height:100%;margin:0;font-family:Inter,Segoe UI,Helvetica,Arial,sans-serif;background:linear-gradient(180deg,#071023 0%, #081422 50%, #08141a 100%);color:#e6eef6}
+  .app{max-width:1100px;margin:24px auto;padding:20px;border-radius:12px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));box-shadow:0 6px 30px rgba(0,0,0,0.6)}
+  header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+  h1{font-size:20px;margin:0}
+  p.lead{margin:0;color:var(--muted);font-size:13px}
+  .controls{display:flex;gap:8px;align-items:center}
+  .card{background:var(--card);padding:12px;border-radius:10px;margin:10px 0;box-shadow:0 4px 12px rgba(0,0,0,0.5)}
+  label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
+  input[type=number]{width:70px;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:inherit}
+  button{background:var(--accent);border:none;color:#08141a;padding:8px 12px;border-radius:8px;cursor:pointer;font-weight:600}
+  button.ghost{background:transparent;color:var(--accent);border:1px solid rgba(224,122,95,0.18)}
+  .flex{display:flex;gap:12px;align-items:center}
+  .players-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-top:12px}
+  .player{padding:12px;border-radius:10px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));position:relative;border:1px solid rgba(255,255,255,0.02)}
+  .player h3{margin:0;font-size:14px}
+  .muted{color:var(--muted);font-size:13px}
+  .big{font-size:28px;font-weight:700}
+  .log{max-height:200px;overflow:auto;padding:8px;background:rgba(255,255,255,0.01);border-radius:8px;font-size:13px}
+  .center{display:flex;align-items:center;justify-content:center}
+  .event{font-weight:700;color:#ffd9c9;padding:8px;border-radius:8px}
+  .private-screen{display:none;padding:12px;background:linear-gradient(180deg,rgba(0,0,0,0.25),rgba(255,255,255,0.01));border-radius:10px}
+  .btn-row{display:flex;gap:8px;flex-wrap:wrap}
+  .vote-btn{background:#153844;color:#cde7ef;border-radius:8px;padding:8px 10px;border:1px solid rgba(255,255,255,0.03);cursor:pointer}
+  footer{margin-top:14px;color:var(--muted);font-size:13px}
+  .hidden{display:none}
+  .role-badge{position:absolute;right:10px;top:10px;background:var(--glass);padding:6px;border-radius:8px;font-size:12px;color:var(--muted)}
+  .status{font-weight:700}
+  .round{background:#081b22;padding:6px;border-radius:6px;color:var(--muted);display:inline-block}
+  .memory{background:#0b1b1c;padding:8px;border-radius:8px;color:#c7f3f6}
+  @media (max-width:640px){.players-grid{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div>
+      <h1>Which Hikaru? — Prototype</h1>
+      <p class="lead">Social deduction inspired by <em>The Summer Hikaru Died</em>. Pass-and-play friendly.</p>
+    </div>
+    <div class="controls">
+      <div class="round">Round <span id="roundNum">0</span> / 5</div>
+      <div id="phaseTag" class="muted">Setup</div>
+    </div>
+  </header>
+
+  <section class="card" id="setupCard">
+    <label>Number of players (4–8)</label>
+    <input id="playerCount" type="number" min="4" max="8" value="5" />
+    <div style="margin-top:10px" class="flex">
+      <button id="setupBtn">Create Game</button>
+      <button id="resetBtn" class="ghost">Reset</button>
+    </div>
+    <p class="muted" style="margin-top:8px">Tip: pass the device to each player when they view their private screen.</p>
+  </section>
+
+  <section class="card hidden" id="gameArea">
+    <div style="display:flex;gap:12px;flex-wrap:wrap">
+      <div style="flex:1;min-width:280px">
+        <div class="card">
+          <h3>Players</h3>
+          <div id="players" class="players-grid"></div>
+        </div>
+
+        <div class="card">
+          <h3>Controls</h3>
+          <div class="btn-row">
+            <button id="startNight">Start Night</button>
+            <button id="startDay" class="ghost">Start Day</button>
+            <button id="nextRound" class="ghost">Next Round</button>
+            <button id="showRoles" class="ghost">Reveal Roles (end game)</button>
+          </div>
+          <div style="margin-top:8px" class="muted">Night: Not-Hikaru acts (secret). Day: flip event, discuss, vote.</div>
+        </div>
+      </div>
+
+      <div style="width:420px;min-width:260px">
+        <div class="card">
+          <h3>Event</h3>
+          <div id="eventArea" class="event muted">No event yet</div>
+          <div style="margin-top:8px" class="muted">Event cards add weird clues or contradictions.</div>
+        </div>
+
+        <div class="card">
+          <h3>Private Screen</h3>
+          <div id="privateArea" class="private-screen">
+            <div id="privateContent"></div>
+            <div style="margin-top:10px" class="btn-row">
+              <button id="closePrivate" class="ghost">Close</button>
+            </div>
+          </div>
+          <div id="privateHint" class="muted">Click a player's "View" to show them their private screen (pass-and-play).</div>
+        </div>
+
+        <div class="card">
+          <h3>Log</h3>
+          <div id="log" class="log"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:12px">
+      <h3>Voting</h3>
+      <div id="votingArea" class="muted">No vote in progress</div>
+    </div>
+  </section>
+
+  <footer>
+    Built for quick play: pass device → private screen → discuss → vote. Want enhancements? Ask and I'll add them.
+  </footer>
+</div>
+
+<script>
+(() => {
+  // Game state
+  const state = {
+    players: [], // {id, name, role, alive, memorySheet, marked:false, seenByWatcher:false, friendUsed:false}
+    round: 0,
+    phase: 'setup', // setup | night | day | voting | ended
+    eventDeck: [],
+    seenEvents: [],
+    notHikaruId: null,
+    maxRounds: 5
+  };
+
+  // Default event cards (short, evocative)
+  const EVENTS = [
+    {title: "Flickering Lights", text:"Lights in the town blinked in patterns — someone claims they saw Hikaru standing still."},
+    {title: "Odd Journal", text:"A torn diary page surfaced referencing a summer that never happened."},
+    {title: "Missing Time", text:"Several players report losing 5-10 minutes with no memory."},
+    {title: "Local Dog Howled", text:"A dog howled all night and refused to approach one person."},
+    {title: "Reversed Photo", text:"A photo of Hikaru is reversed — left and right look swapped."},
+    {title: "Wrong Name", text:"Someone called Hikaru by a nickname only family uses, but they said they didn't remember."},
+    {title: "Strange Mark", text:"A faint mark appears on someone's wrist after night."},
+    {title: "Wrong Memory", text:"A player insists on a memory that contradicts what others recall."},
+    {title: "Quiet Radio", text:"A radio broadcast repeated a phrase backwards."},
+    {title: "Garden Footprints", text:"Two sets of footprints leading to a locked shed."},
+  ];
+
+  // Roles distribution by player count (basic)
+  function rolesForCount(n){
+    // Always 1 Hikaru, 1 Not-Hikaru, 1 Friend, 1 Watcher if n>=6, rest villagers
+    const roles = [];
+    roles.push('Hikaru');
+    roles.push('Not-Hikaru');
+    roles.push('Friend');
+    if(n >= 6) roles.push('Watcher');
+    while(roles.length < n) roles.push('Villager');
+    return roles;
+  }
+
+  // Utilities
+  const $ = id => document.getElementById(id);
+  function log(msg){ const el = $('log'); el.innerHTML = `<div>${new Date().toLocaleTimeString()} — ${msg}</div>` + el.innerHTML; }
+
+  // Setup
+  $('setupBtn').addEventListener('click', ()=>{
+    const n = parseInt($('playerCount').value) || 5;
+    if(n < 4 || n > 8){ alert('Choose between 4 and 8 players'); return; }
+    createPlayers(n);
+    shuffleEventDeck();
+    $('setupCard').classList.add('hidden');
+    $('gameArea').classList.remove('hidden');
+    state.round = 0;
+    $('roundNum').innerText = state.round;
+    $('phaseTag').innerText = 'Waiting to start';
+    log(`Game created with ${n} players.`);
+  });
+
+  $('resetBtn').addEventListener('click', ()=> location.reload());
+
+  function createPlayers(n){
+    state.players = [];
+    const roles = shuffle(rolesForCount(n));
+    for(let i=0;i<n;i++){
+      const p = {
+        id: i+1,
+        name: 'Player ' + (i+1),
+        role: roles[i],
+        roleKnown: false,
+        alive: true,
+        memorySheet: null,
+        marked: false,
+        seenByWatcher: false,
+        friendUsed: false
+      };
+      if(p.role === 'Not-Hikaru'){
+        state.notHikaruId = p.id;
+      }
+      // generate fake memories for Not-Hikaru
+      if(p.role === 'Not-Hikaru') p.memorySheet = fakeMemories();
+      state.players.push(p);
+    }
+    renderPlayers();
+  }
+
+  function renderPlayers(){
+    const el = $('players'); el.innerHTML = '';
+    state.players.forEach(p => {
+      const div = document.createElement('div'); div.className = 'player';
+      div.id = 'player-'+p.id;
+      div.innerHTML = `
+        <div class="role-badge muted">${p.alive ? 'Alive' : 'Out'}</div>
+        <h3>${p.name}</h3>
+        <div class="muted">ID: ${p.id}</div>
+        <div style="margin-top:8px;" class="muted">Role: <span class="status">${p.roleKnown ? p.role : 'Hidden'}</span></div>
+        <div style="margin-top:8px" class="btn-row">
+          <button data-id="${p.id}" class="view-btn ghost">View</button>
+        </div>
+      `;
+      el.appendChild(div);
+    });
+    // attach view handlers
+    document.querySelectorAll('.view-btn').forEach(b => b.addEventListener('click', e => {
+      const id = parseInt(e.currentTarget.dataset.id);
+      showPrivateScreen(id);
+    }));
+  }
+
+  function showPrivateScreen(id){
+    const p = state.players.find(x=>x.id===id);
+    const area = $('privateArea');
+    const content = $('privateContent');
+    content.innerHTML = `<h3>${p.name} — Private</h3>`;
+    content.innerHTML += `<div class="muted" style="margin-top:6px">Role: <strong style="color:#ffd9c9">${p.role}</strong></div>`;
+    if(p.role === 'Not-Hikaru'){
+      content.innerHTML += `<div style="margin-top:8px" class="memory"><strong>Memory Sheet</strong><div style="margin-top:6px">${p.memorySheet.map(m=>'<div>• '+m+'</div>').join('')}</div></div>`;
+      content.innerHTML += `<div class="muted" style="margin-top:8px">You are trying to blend in. Use these memories to answer questions.</div>`;
+    } else if(p.role === 'Friend'){
+      content.innerHTML += `<div class="muted" style="margin-top:8px">You know Hikaru best. Once per day you may privately ask any player one yes/no question using the "Ask" button on their private view.</div>`;
+    } else if(p.role === 'Watcher'){
+      content.innerHTML += `<div class="muted" style="margin-top:8px">Each night you'll learn whether something "unnatural" happened.</div>`;
+    } else if(p.role === 'Hikaru'){
+      content.innerHTML += `<div class="muted" style="margin-top:8px">Remember your true memories. Convince others you're the real Hikaru.</div>`;
+    } else {
+      content.innerHTML += `<div class="muted" style="margin-top:8px">You're a Villager — listen, observe, and vote carefully.</div>`;
+    }
+    // extra controls for Friend to Ask and for all to mark notes
+    content.innerHTML += `<div style="margin-top:10px" class="btn-row">`;
+    content.innerHTML += `<button id="privateCloseLocal" class="ghost">Close</button>`;
+    if(p.role === 'Friend'){
+      content.innerHTML += `<button id="friendAsk" class="vote-btn">Ask Player...</button>`;
+    }
+    content.innerHTML += `</div>`;
+    area.style.display = 'block';
+    $('closePrivate').onclick = ()=>{ area.style.display='none'; };
+    const localClose = $('privateCloseLocal'); if(localClose) localClose.onclick = ()=> area.style.display='none';
+    const friendAsk = $('friendAsk'); if(friendAsk) friendAsk.onclick = ()=> friendAskFlow(p);
+  }
+
+  function friendAskFlow(friend){
+    // pick a target (simple prompt)
+    const alive = state.players.filter(x=>x.alive && x.id !== friend.id);
+    const names = alive.map(x=>`${x.id}: ${x.name}`).join('\\n');
+    const pick = prompt(`Pick a player to privately ask (enter ID):\\n${names}`);
+    const id = parseInt(pick);
+    const target = state.players.find(x=>x.id===id);
+    if(!target){ alert('Invalid'); return; }
+    if(friend.friendUsed){ alert('You already used your Friend question this round.'); return; }
+    const q = prompt('Enter a yes/no question for that player (it will be asked privately):');
+    if(!q){ alert('Cancelled'); return; }
+    // Simulate private ask: reveal to friend the answer they should get
+    let answer = simulateAnswerFor(target, q);
+    alert(`Private answer from ${target.name}: "${answer}" — pass the device back to ${friend.name}`);
+    friend.friendUsed = true;
+    log(`${friend.name} privately asked ${target.name}: "${q}"`);
+  }
+
+  function simulateAnswerFor(target, q){
+    // Very simple: if Not-Hikaru, they will answer using memorySheet randomly; otherwise generic
+    if(target.role === 'Not-Hikaru'){
+      return pick(target.memorySheet);
+    } else if(target.role === 'Hikaru'){
+      return 'Yes — that matches my memory.';
+    } else {
+      return Math.random() > 0.5 ? 'Yes.' : 'No.';
+    }
+  }
+
+  // Event deck
+  function shuffleEventDeck(){
+    state.eventDeck = shuffle(EVENTS.slice());
+    state.seenEvents = [];
+  }
+
+  // Buttons
+  $('startNight').addEventListener('click', ()=>{
+    if(state.phase === 'ended') return;
+    if(state.phase === 'night'){ alert('Night already in progress'); return; }
+    if(state.round >= state.maxRounds){ alert('Max rounds reached. Start a new game.'); return; }
+    state.phase = 'night';
+    state.round += 1;
+    $('roundNum').innerText = state.round;
+    $('phaseTag').innerText = 'Night';
+    state.players.forEach(p=>p.marked=false);
+    state.players.forEach(p=>p.friendUsed=false);
+    // Night action: Not-Hikaru marks a player secretly
+    const nh = state.players.find(x=>x.role==='Not-Hikaru' && x.alive);
+    if(!nh){ alert('Not-Hikaru is gone or missing — jump to day.'); return; }
+    // Show instructions to pass to Not-Hikaru
+    const want = confirm('Pass the device to the player who is Not-Hikaru so they can perform their secret night action. Press OK when ready.');
+    if(!want) return;
+    const pick = prompt('Not-Hikaru: choose a player ID to "mark" (their player card will show a faint mark next day). Enter ID:');
+    const id = parseInt(pick);
+    const target = state.players.find(x=>x.id===id && x.alive);
+    if(!target){ alert('Invalid target. Night skipped.'); return; }
+    target.marked = true;
+    log(`Night action: ${nh.name} marked ${target.name} (secret).`);
+    // Watcher check: if watcher alive, tell them if unnatural happened
+    const watcher = state.players.find(x=>x.role==='Watcher' && x.alive);
+    if(watcher){
+      alert(`${watcher.name} (Watcher): Someone acted unnaturally tonight.`);
+      log(`${watcher.name} detected unnatural activity.`);
+      watcher.seenByWatcher = true;
+    }
+    // proceed to day
+    $('startDay').classList.remove('ghost');
+    $('phaseTag').innerText = 'Night ended — start Day';
+  });
+
+  $('startDay').addEventListener('click', ()=>{
+    if(state.phase !== 'night'){ alert('Start night first'); return; }
+    state.phase = 'day';
+    $('phaseTag').innerText = 'Day';
+    // flip event
+    const ev = state.eventDeck.shift();
+    if(ev){
+      state.seenEvents.push(ev);
+      $('eventArea').innerHTML = `<strong>${ev.title}</strong><div style="margin-top:6px" class="muted">${ev.text}</div>`;
+      log(`Event: ${ev.title} — ${ev.text}`);
+    } else {
+      $('eventArea').innerText = 'No more events.';
+      log('No event to draw.');
+    }
+    // Reveal marks visually
+    state.players.forEach(p => {
+      const el = document.getElementById('player-'+p.id);
+      if(!el) return;
+      const badge = el.querySelector('.role-badge');
+      badge.innerText = p.alive ? (p.marked ? 'Marked' : 'Alive') : 'Out';
+    });
+    // Setup voting area
+    startVoting();
+  });
+
+  function startVoting(){
+    state.phase = 'voting';
+    $('phaseTag').innerText = 'Voting';
+    const alive = state.players.filter(x=>x.alive);
+    const vArea = $('votingArea');
+    vArea.innerHTML = '<div class="muted">Select one player to confront (majority needed). Use secret voting via prompts.</div>';
+    log('Voting started.');
+    // For pass-and-play: ask each alive player to vote secretly by entering ID
+    const votes = {};
+    for(const p of alive){
+      const choice = prompt(`${p.name} — enter the ID of the player you want to confront:`);
+      const id = parseInt(choice);
+      if(!id || !state.players.find(x=>x.id===id && x.alive)){
+        alert('Invalid vote — counted as abstain.');
+        continue;
+      }
+      votes[id] = (votes[id]||0) + 1;
+      log(`${p.name} voted for Player ${id}`);
+    }
+    // tally
+    const entries = Object.entries(votes).map(([k,v])=>({id:parseInt(k),v}));
+    entries.sort((a,b)=>b.v - a.v);
+    if(entries.length === 0){ alert('No votes cast. No confrontation.'); log('No confrontation (no votes).'); endRound(); return; }
+    const top = entries[0];
+    const ties = entries.filter(e=>e.v === top.v);
+    let confrontedId = top.id;
+    if(ties.length > 1){
+      // tie-break: random among tied
+      confrontedId = pick(ties.map(t=>t.id));
+      alert('There was a tie. Random tie-break applied.');
+      log('Tie in voting — random tie-break.');
+    }
+    // reveal confronted player
+    const confronted = state.players.find(x=>x.id===confrontedId);
+    alert(`You confront ${confronted.name} (Player ${confronted.id}). Their role is: ${confronted.role}`);
+    log(`${confronted.name} was confronted — role: ${confronted.role}`);
+    // eliminate if Not-Hikaru, else eliminate that player (wrongly confronting Hikaru or Villager causes Not-Hikaru win condition to get closer)
+    confronted.alive = false;
+    renderPlayers();
+    // check win conditions
+    if(confronted.role === 'Not-Hikaru'){
+      alert('Villagers win! Not-Hikaru was found.');
+      log('Game ended — Villagers win.');
+      endGame('Villagers');
+      return;
+    } else if(confronted.role === 'Hikaru'){
+      alert('Oh no — you confronted Hikaru. Not-Hikaru wins.');
+      log('Game ended — Not-Hikaru wins (Hikaru confronted).');
+      endGame('Not-Hikaru');
+      return;
+    } else {
+      alert(`${confronted.role} was eliminated. Game continues.`);
+      // continue unless max rounds reached or Not-Hikaru is last alive
+      const nhAlive = state.players.find(x=>x.role==='Not-Hikaru' && x.alive);
+      if(!nhAlive){
+        alert('Not-Hikaru is gone — Villagers win.');
+        endGame('Villagers');
+        return;
+      }
+      endRound();
+    }
+  }
+
+  function endRound(){
+    $('startDay').classList.add('ghost');
+    $('phaseTag').innerText = 'Round ended — Start next night';
+    if(state.round >= state.maxRounds){
+      // if Not-Hikaru survived to max rounds -> Not-Hikaru wins
+      const nhAlive = state.players.find(x=>x.role==='Not-Hikaru' && x.alive);
+      if(nhAlive){
+        alert('Max rounds reached. Not-Hikaru survived — Not-Hikaru wins.');
+        endGame('Not-Hikaru');
+        return;
+      }
+    }
+  }
+
+  function endGame(winner){
+    state.phase = 'ended';
+    $('phaseTag').innerText = 'Game ended — Winner: ' + winner;
+    log('Game finished. Winner: ' + winner);
+    $('showRoles').classList.remove('ghost');
+  }
+
+  $('showRoles').addEventListener('click', ()=>{
+    const text = state.players.map(p=>`${p.name} — ${p.role} — ${p.alive ? 'Alive' : 'Out'}`).join('\\n');
+    alert('Roles:\\n' + text);
+  });
+
+  // Helpers
+  function fakeMemories(){
+    const pool = [
+      "We went to the summer festival and watched fireworks by the river.",
+      "Hikaru used to carve tiny stars into tree trunks behind the shop.",
+      "We used to call him 'Hika' when we were kids.",
+      "He always brought a red ribbon in his pocket.",
+      "Once he fell asleep on the Ferris wheel and started humming.",
+      "I taught him how to fish down by the old bridge.",
+    ];
+    return shuffle(pool).slice(0,3);
+  }
+
+  function shuffle(a){ // fisher-yates
+    for(let i=a.length-1;i>0;i--){
+      const j = Math.floor(Math.random()*(i+1));
+      [a[i],a[j]] = [a[j],a[i]];
+    }
+    return a;
+  }
+  function pick(a){ return a[Math.floor(Math.random()*a.length)]; }
+
+  // render initial empty players container
+  renderPlayers();
+})();
+</script>
+</body>
+</html>
